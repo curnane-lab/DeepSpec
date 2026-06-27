@@ -10,6 +10,7 @@ from deepspec.utils import (
     seed_all,
     get_git_sha,
 )
+from deepspec.utils.device import device_count
 
 os.environ['USE_TORCH']='true'
 os.environ['WANDB_DISABLED']='true'
@@ -42,4 +43,4 @@ if __name__ == "__main__":
     if os.path.exists(".git"):
         print(f"git status:", "\n\n".join(get_git_sha(detail_info=True)))
         print("git diff:", get_git_diff())
-    torch.multiprocessing.spawn(main, nprocs=torch.cuda.device_count())
+    torch.multiprocessing.spawn(main, nprocs=device_count())

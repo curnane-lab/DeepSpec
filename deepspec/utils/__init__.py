@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import torch
+from deepspec.utils.device import manual_seed_all
 
 from .config import CustomJSONEncoder, jsonable, load_config, parse_opts_to_config
 from .distributed import (
@@ -21,7 +22,7 @@ def seed_all(seed):
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    manual_seed_all(seed)
 
 def get_git_sha(detail_info=False):
     import subprocess

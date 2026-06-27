@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.nn.attention.flex_attention import create_block_mask
 
+from deepspec.utils.device import get_device_type
 from deepspec.utils.metrics import add_metric
 
 
@@ -75,7 +76,7 @@ def validate_target_layer_ids(layer_ids, num_target_layers: int):
     return layer_ids
 
 
-def create_dspark_attention_mask(
+def _create_dspark_4d_attention_mask(
     *,
     anchor_positions: torch.Tensor,
     block_keep_mask: torch.Tensor,
@@ -83,6 +84,53 @@ def create_dspark_attention_mask(
     block_size: int,
     device: torch.device,
 ):
+    """Fallback 4D attention mask for backends without flex_attention (e.g. NPU).
+
+    Returns a [bsz, 1, Q_LEN, KV_LEN] float mask compatible with SDPA/eager.
+    """
+    bsz, num_blocks = anchor_positions.shape
+    q_len = num_blocks * block_size
+    kv_len = seq_len + q_len
+    q_idx = torch.arange(q_len, device=device).view(1, 1, q_len, 1)
+    kv_idx = torch.arange(kv_len, device=device).view(1, 1, 1, kv_len)
+
+    q_block_id = q_idx // block_size
+    anchor_pos = anchor_positions.gather(
+        1, q_block_id.squeeze(1).squeeze(1).expand(bsz, q_len)
+    ).view(bsz, 1, q_len, 1)
+    is_context = kv_idx < seq_len
+    mask_context = is_context & (kv_idx < anchor_pos)
+    is_draft = kv_idx >= seq_len
+    kv_block_id = (kv_idx - seq_len) // block_size
+    mask_draft = is_draft & (q_block_id == kv_block_id)
+    is_valid_block = block_keep_mask.gather(
+        1, q_block_id.squeeze(1).squeeze(1).expand(bsz, q_len)
+    ).view(bsz, 1, q_len, 1)
+    mask = (mask_context | mask_draft) & is_valid_block
+    # Convert to additive mask: 0 for attend, -inf for masked
+    return mask.to(torch.float32) * 0.0 + (~mask).to(torch.float32) * float("-inf")
+
+
+def create_dspark_attention_mask(
+    *,
+    anchor_positions: torch.Tensor,
+    block_keep_mask: torch.Tensor,
+    seq_len: int,
+    block_size: int,
+    device: torch.device,
+    use_flex_attention: bool = True,
+):
+    bsz, num_blocks = anchor_positions.shape
+    # Ascend NPU does not support torch.nn.attention.flex_attention.
+    if not use_flex_attention or get_device_type() == "npu":
+        return _create_dspark_4d_attention_mask(
+            anchor_positions=anchor_positions,
+            block_keep_mask=block_keep_mask,
+            seq_len=seq_len,
+            block_size=block_size,
+            device=device,
+        )
+
     def dspark_mask_mod(b, h, q_idx, kv_idx):
         del h
         q_block_id = q_idx // block_size
@@ -95,7 +143,6 @@ def create_dspark_attention_mask(
         is_valid_block = block_keep_mask[b, q_block_id]
         return (mask_context | mask_draft) & is_valid_block
 
-    bsz, num_blocks = anchor_positions.shape
     return create_block_mask(
         dspark_mask_mod,
         B=bsz,

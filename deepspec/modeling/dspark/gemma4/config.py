@@ -1,9 +1,10 @@
 import copy
 
 from deepspec.modeling.dspark.common import validate_target_layer_ids
+from deepspec.utils.device import get_device_type
 
 
-TRAIN_ATTN_IMPLEMENTATION = "flex_attention"
+TRAIN_ATTN_IMPLEMENTATION = "sdpa" if get_device_type() == "npu" else "flex_attention"
 
 
 def get_gemma4_text_config(target_config):

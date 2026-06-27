@@ -37,6 +37,7 @@ from deepspec.utils import (
     print_on_local_main,
     seed_all,
 )
+from deepspec.utils.device import device_count, empty_cache
 
 os.environ["USE_TORCH"] = "true"
 os.environ["WANDB_DISABLED"] = "true"
@@ -335,7 +336,7 @@ def main(local_rank: int):
     finally:
         writer.close()
     del target_model
-    torch.cuda.empty_cache()
+    empty_cache()
     dataset.close()
     summary = LocalCacheWriteSummary(
         global_rank=global_rank,
@@ -399,4 +400,4 @@ if __name__ == "__main__":
     if os.path.exists(".git"):
         print(f"git status:", "\n\n".join(get_git_sha(detail_info=True)))
         print("git diff:", get_git_diff())
-    torch.multiprocessing.spawn(main, nprocs=torch.cuda.device_count())
+    torch.multiprocessing.spawn(main, nprocs=device_count())

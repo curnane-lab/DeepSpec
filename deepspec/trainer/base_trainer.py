@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 from deepspec.data import CacheDataset, validate_train_cache
-from deepspec.data.cuda_prefetcher import CUDAPrefetcher
+from deepspec.data.device_prefetcher import DevicePrefetcher
 from deepspec.utils import (
     BF16Optimizer,
     StatelessResumableDistributedSampler,
@@ -21,6 +21,7 @@ from deepspec.utils import (
     print_on_global_main,
     print_on_local_main,
 )
+from deepspec.utils.device import device_count, get_device_type
 from deepspec.trainer.ckpt_manager import (
     discover_latest_checkpoint,
     load_resume_draft_model,
@@ -65,9 +66,9 @@ def _build_fsdp_kwargs(
         sharding_strategy=sharding_strategy,
     )
     if sharding_strategy in _HYBRID_STRATEGIES:
-        devices_per_node = torch.cuda.device_count()
+        devices_per_node = device_count()
         fsdp_kwargs["device_mesh"] = init_device_mesh(
-            "cuda",
+            get_device_type(),
             (world_size // devices_per_node, devices_per_node),
             mesh_dim_names=("replicate", "shard"),
         )
@@ -175,7 +176,7 @@ class BaseTrainer:
                 global_rank=self.global_rank,
             )
         self.model = self.draft_model
-        if self.args.train.torch_compile:
+        if self.args.train.torch_compile and get_device_type() != "npu":
             print_on_local_main("Compiling training model with torch.compile...")
             self.model = torch.compile(self.model, dynamic=True)
         self.model = self._wrap_with_fsdp(self.model)
@@ -359,7 +360,7 @@ class BaseTrainer:
             start_offset_samples=self.next_micro_step * local_batch_size,
             num_samples=remaining_samples,
         )
-        prefetcher = CUDAPrefetcher(dataloader, self.device)
+        prefetcher = DevicePrefetcher(dataloader, self.device)
         training_logger.start_session(global_step=self.global_step)
 
         with self.suspend_controller.monitoring():
