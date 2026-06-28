@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# NPU launch script for DeepSpec DFlash training.
+# NPU launch script for DeepSpec DFlash training (Qwen3.5-4B).
 # Mirrors scripts/train/train.sh but uses Ascend NPUs instead of CUDA GPUs.
 #
 # Usage:
@@ -23,8 +23,8 @@ export PYTORCH_NPU_ALLOC_CONF=${PYTORCH_NPU_ALLOC_CONF:-max_split_size_mb:32}
 # Force the codebase to use the NPU device abstraction.
 export DEEPSPEC_DEVICE=${DEEPSPEC_DEVICE:-npu}
 
-target_cache_dir=${target_cache_dir:-${HOME}/.cache/deepspec/qwen3_4b_target_cache}
+target_cache_dir=${target_cache_dir:-${HOME}/.cache/deepspec/qwen3_5_4b_target_cache}
 
 python train.py \
-    --config config/dflash/dflash_qwen3_4b.py \
+    --config config/dflash/dflash_qwen3_5_4b.py \
     --opts "data.target_cache_path=${target_cache_dir}"

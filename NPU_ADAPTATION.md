@@ -1,15 +1,17 @@
 # DeepSpec NPU Adaptation Notes
 
 This branch (`add_npu_support`) adds Ascend NPU support for the **DFlash**
-draft model path (Qwen3/Gemma4 target families). Eagle3 support is not yet
-included because its Triton-based fused loss requires additional work.
+draft model path, with the default example targeting **Qwen3.5-4B**.
 
 ## What works on NPU
 
-- DFlash training via `scripts/train/train_npu.sh`
-- DFlash evaluation via `scripts/eval/eval_npu.sh`
-- Target cache preparation via `scripts/data/prepare_target_cache.py`
+- DFlash training for Qwen3.5-4B via `scripts/train/train_npu.sh`
+- DFlash evaluation for Qwen3.5-4B via `scripts/eval/eval_npu.sh`
+- Target cache preparation for Qwen3.5-4B via `scripts/data/prepare_target_cache.py`
 - FSDP distributed training with the `hccl` backend
+
+The Qwen3 architecture files are reused for Qwen3.5 because the two model
+families share the same transformer implementation (`Qwen3PreTrainedModel`).
 
 ## Key changes
 
@@ -53,13 +55,16 @@ export PYTORCH_NPU_ALLOC_CONF=max_split_size_mb:32
 export DEEPSPEC_DEVICE=npu
 ```
 
-## Running DFlash training on NPU
+## Running DFlash training on NPU (Qwen3.5-4B)
 
 ```bash
 bash scripts/train/train_npu.sh
 ```
 
-## Running DFlash evaluation on NPU
+This uses `config/dflash/dflash_qwen3_5_4b.py`, which points to
+`Qwen/Qwen3.5-4B` and selects `target_layer_ids=[1, 8, 15, 22, 29]`.
+
+## Running DFlash evaluation on NPU (Qwen3.5-4B)
 
 ```bash
 bash scripts/eval/eval_npu.sh
@@ -74,7 +79,7 @@ model forward. Run it with the NPU environment set:
 export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3
 export DEEPSPEC_DEVICE=npu
 python scripts/data/prepare_target_cache.py \
-    --config config/dflash/dflash_qwen3_4b.py \
+    --config config/dflash/dflash_qwen3_5_4b.py \
     --train_data_path <path_to_train.jsonl> \
     --output_dir <target_cache_dir>
 ```
@@ -84,6 +89,18 @@ still requires a CUDA-compatible inference engine for answer regeneration.
 For NPU-only environments, replace it with an OpenAI-compatible server backed
 by an NPU inference engine (e.g. vLLM-ascend / MindIE).
 
+## Adapting to other Qwen3.5 sizes
+
+Copy `config/dflash/dflash_qwen3_5_4b.py`, update:
+
+- `model.target_model_name_or_path`
+- `model.target_layer_ids` (must be strictly increasing and inside the target
+  model's layer range; `-1` is allowed for the embedding output)
+- `model.mask_token_id` (the `[MASK]` token id of the Qwen3.5 tokenizer)
+- `exp_name` and `data.target_cache_path`
+
+Then launch with `--config <your_config.py>`.
+
 ## Known limitations
 
 - **Eagle3** is not yet adapted; its `FusedLogSoftmaxLoss` uses Triton and
@@ -91,6 +108,8 @@ by an NPU inference engine (e.g. vLLM-ascend / MindIE).
 - **Gemma4** SDPA path has been updated but may need additional testing on
   Ascend kernels that do not support all SDPA variants.
 - Some Gemma4-specific fused operations may require eager fallback.
+- The original Qwen3-4B configs are left untouched; this branch's NPU scripts
+  default to Qwen3.5-4B.
 
 ## References
 
