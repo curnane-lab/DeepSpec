@@ -15,9 +15,9 @@ def _get_qwen3_text_config(target_config):
     itself is the text config.
     """
     model_type = str(getattr(target_config, "model_type", ""))
-    if model_type in ("qwen3_5",):
+    if model_type in ("qwen3_5", "qwen3_5_mtp"):
         assert hasattr(target_config, "text_config"), (
-            "Qwen3.5 target config must expose a text_config."
+            f"Qwen3.5 target config (model_type={model_type}) must expose a text_config."
         )
         return copy.deepcopy(target_config.text_config)
     return copy.deepcopy(target_config)
@@ -36,7 +36,6 @@ def _validate_required_text_fields(text_config):
         "hidden_act",
         "max_position_embeddings",
         "rms_norm_eps",
-        "rope_theta",
         "head_dim",
         "tie_word_embeddings",
     )
@@ -44,6 +43,18 @@ def _validate_required_text_fields(text_config):
         assert hasattr(text_config, field), (
             f"target text config.{field} must be provided."
         )
+    # rope_theta may live in rope_parameters; ensure at least one exists.
+    has_rope_theta = (
+        hasattr(text_config, "rope_theta")
+        and text_config.rope_theta is not None
+    )
+    has_rope_params = (
+        hasattr(text_config, "rope_parameters")
+        and text_config.rope_parameters is not None
+    )
+    assert has_rope_theta or has_rope_params, (
+        "target text config must provide rope_theta or rope_parameters."
+    )
 
 
 def build_draft_config(
