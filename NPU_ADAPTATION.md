@@ -53,20 +53,28 @@ export PYTORCH_NPU_ALLOC_CONF=max_split_size_mb:32
 
 # Force NPU mode (auto-detected if torch.npu.is_available())
 export DEEPSPEC_DEVICE=npu
+
+# Path to your local Qwen3.5-4B weights (default: Qwen3.5-4B)
+export TARGET_MODEL_PATH=/path/to/Qwen3.5-4B
 ```
 
 ## Running DFlash training on NPU (Qwen3.5-4B)
 
+Place or symlink the Qwen3.5-4B weights at `Qwen3.5-4B` under the repo root,
+or set `TARGET_MODEL_PATH` to the directory containing the weights:
+
 ```bash
+export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
 bash scripts/train/train_npu.sh
 ```
 
-This uses `config/dflash/dflash_qwen3_5_4b.py`, which points to
-`Qwen/Qwen3.5-4B` and selects `target_layer_ids=[1, 8, 15, 22, 29]`.
+This uses `config/dflash/dflash_qwen3_5_4b.py`, which selects
+`target_layer_ids=[1, 8, 15, 22, 29]` for Qwen3.5-4B.
 
 ## Running DFlash evaluation on NPU (Qwen3.5-4B)
 
 ```bash
+export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
 bash scripts/eval/eval_npu.sh
 ```
 
@@ -78,6 +86,7 @@ model forward. Run it with the NPU environment set:
 ```bash
 export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3
 export DEEPSPEC_DEVICE=npu
+export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
 python scripts/data/prepare_target_cache.py \
     --config config/dflash/dflash_qwen3_5_4b.py \
     --train_data_path <path_to_train.jsonl> \
@@ -109,7 +118,7 @@ Then launch with `--config <your_config.py>`.
   Ascend kernels that do not support all SDPA variants.
 - Some Gemma4-specific fused operations may require eager fallback.
 - The original Qwen3-4B configs are left untouched; this branch's NPU scripts
-  default to Qwen3.5-4B.
+  default to Qwen3.5-4B with a local-weights default.
 
 ## References
 

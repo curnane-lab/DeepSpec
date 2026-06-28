@@ -11,12 +11,9 @@ export WORLD_SIZE=${WORLD_SIZE:-1}
 
 export DEEPSPEC_DEVICE=${DEEPSPEC_DEVICE:-npu}
 
-# Match this to the target model used by the draft checkpoint.
-target_name_or_path=Qwen/Qwen3.5-4B
+# Default to a local weights directory for offline/air-gapped environments.
+export TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-Qwen3.5-4B}
 
-# Training writes checkpoints under ~/checkpoints/<project_name>/<exp_name>/step_*.
-# Use step_latest for the most recent checkpoint, or replace it with step_<N>.
-draft_name_or_path=${HOME}/checkpoints/deepspec/dflash_block8_qwen3_5_4b/step_latest
 python eval.py \
-    --target_name_or_path ${target_name_or_path} \
-    --draft_name_or_path ${draft_name_or_path}
+    --target_name_or_path ${TARGET_MODEL_PATH} \
+    --draft_name_or_path ${HOME}/checkpoints/deepspec/dflash_block8_qwen3_5_4b/step_latest

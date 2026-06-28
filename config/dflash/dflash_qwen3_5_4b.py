@@ -7,8 +7,13 @@ project_name = "deepspec"
 exp_name = "dflash_block8_qwen3_5_4b"
 seed = 42
 
+# Default to a local weights directory so training works in offline/air-gapped
+# environments. Override with the TARGET_MODEL_PATH environment variable or
+# via --opts "model.target_model_name_or_path=<path>".
+TARGET_MODEL_NAME_OR_PATH = os.environ.get("TARGET_MODEL_PATH", "Qwen3.5-4B")
+
 model = dict(
-    target_model_name_or_path="Qwen/Qwen3.5-4B",
+    target_model_name_or_path=TARGET_MODEL_NAME_OR_PATH,
     block_size=7,
     num_draft_layers=5,
     target_layer_ids=[1, 8, 15, 22, 29],
