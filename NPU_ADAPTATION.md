@@ -58,10 +58,40 @@ export DEEPSPEC_DEVICE=npu
 export TARGET_MODEL_PATH=/path/to/Qwen3.5-4B
 ```
 
+## Data preparation (required before training)
+
+Training reads pre-computed target hidden states from a **target cache**.
+You must build this cache once before launching training.
+
+```bash
+export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3
+export DEEPSPEC_DEVICE=npu
+export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
+
+target_cache_dir=${HOME}/.cache/deepspec/qwen3_5_4b_target_cache
+
+python scripts/data/prepare_target_cache.py \
+    --config config/dflash/dflash_qwen3_5_4b.py \
+    --train_data_path <path_to_train.jsonl> \
+    --output_dir ${target_cache_dir} \
+    --local_batch_size 1 \
+    --num_workers 4
+```
+
+This writes `manifest.json` and binary shards under `${target_cache_dir}`.
+`scripts/train/train_npu.sh` checks for this manifest and fails with a
+helpful message if it is missing.
+
+Note: the `scripts/data/launch_sglang_server.sh` helper uses SGLang, which
+still requires a CUDA-compatible inference engine for answer regeneration.
+For NPU-only environments, replace it with an OpenAI-compatible server backed
+by an NPU inference engine (e.g. vLLM-ascend / MindIE) when generating the
+initial training answers.
+
 ## Running DFlash training on NPU (Qwen3.5-4B)
 
 Place or symlink the Qwen3.5-4B weights at `Qwen3.5-4B` under the repo root,
-or set `TARGET_MODEL_PATH` to the directory containing the weights:
+or set `TARGET_MODEL_PATH` to the directory containing the weights, then run:
 
 ```bash
 export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
@@ -77,26 +107,6 @@ This uses `config/dflash/dflash_qwen3_5_4b.py`, which selects
 export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
 bash scripts/eval/eval_npu.sh
 ```
-
-## Data preparation on NPU
-
-The `prepare_target_cache.py` script is device-agnostic except for the target
-model forward. Run it with the NPU environment set:
-
-```bash
-export ASCEND_RT_VISIBLE_DEVICES=0,1,2,3
-export DEEPSPEC_DEVICE=npu
-export TARGET_MODEL_PATH=/data1/f00538480/models/Qwen3.5-4B
-python scripts/data/prepare_target_cache.py \
-    --config config/dflash/dflash_qwen3_5_4b.py \
-    --train_data_path <path_to_train.jsonl> \
-    --output_dir <target_cache_dir>
-```
-
-Note: the `scripts/data/launch_sglang_server.sh` helper uses SGLang, which
-still requires a CUDA-compatible inference engine for answer regeneration.
-For NPU-only environments, replace it with an OpenAI-compatible server backed
-by an NPU inference engine (e.g. vLLM-ascend / MindIE).
 
 ## Adapting to other Qwen3.5 sizes
 

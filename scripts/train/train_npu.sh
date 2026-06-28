@@ -30,6 +30,22 @@ export TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-Qwen3.5-4B}
 
 target_cache_dir=${target_cache_dir:-${HOME}/.cache/deepspec/qwen3_5_4b_target_cache}
 
+# The training step requires the target cache to be prepared in advance.
+if [[ ! -f "${target_cache_dir}/manifest.json" ]]; then
+    echo "ERROR: Target cache not found at ${target_cache_dir}/manifest.json"
+    echo ""
+    echo "Please prepare the target cache first, for example:"
+    echo "  export TARGET_MODEL_PATH=${TARGET_MODEL_PATH}"
+    echo "  export DEEPSPEC_DEVICE=npu"
+    echo "  python scripts/data/prepare_target_cache.py \\"
+    echo "      --config config/dflash/dflash_qwen3_5_4b.py \\"
+    echo "      --train_data_path <path_to_train.jsonl> \\"
+    echo "      --output_dir ${target_cache_dir}"
+    echo ""
+    echo "Or set a different cache directory via the target_cache_dir variable."
+    exit 1
+fi
+
 python train.py \
     --config config/dflash/dflash_qwen3_5_4b.py \
     --opts "data.target_cache_path=${target_cache_dir}"
