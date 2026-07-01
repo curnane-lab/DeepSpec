@@ -44,7 +44,8 @@ train = dict(
     max_train_steps=None,
     max_grad_norm=1.0,
     sharding_strategy="no_shard",
-    torch_compile=True,
+    # torch.compile is not supported on Ascend NPUs.
+    torch_compile=False,
 )
 
 logging = dict(

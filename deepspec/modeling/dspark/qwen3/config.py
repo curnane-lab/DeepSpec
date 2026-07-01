@@ -1,17 +1,17 @@
 import copy
 
 from deepspec.modeling.dspark.common import validate_target_layer_ids
-from deepspec.utils.device import get_device_type
+from deepspec.utils import is_npu_available
 
 
-TRAIN_ATTN_IMPLEMENTATION = "sdpa" if get_device_type() == "npu" else "flex_attention"
+TRAIN_ATTN_IMPLEMENTATION = "sdpa" if is_npu_available() else "flex_attention"
 
 
 def _get_qwen3_text_config(target_config):
     """Return the text config used by Qwen3 / Qwen3.5 target models.
 
     Qwen3.5 uses a composite config where the language-model parameters live in
-    ``text_config`` (similar to Gemma4).  For plain Qwen3 the target config
+    ``text_config`` (similar to Gemma4). For plain Qwen3 the target config
     itself is the text config.
     """
     model_type = str(getattr(target_config, "model_type", ""))

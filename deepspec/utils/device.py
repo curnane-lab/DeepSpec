@@ -1,137 +1,76 @@
-"""Device abstraction utilities for DeepSpec.
-
-This module centralizes device/backend detection so the same codebase can run
-on NVIDIA GPUs (CUDA), Ascend NPUs (NPU), and CPU fallback without sprinkling
-`torch.cuda` calls throughout the training/evaluation logic.
-
-Adapted from patterns used in SpecForge NPU adaptations.
-"""
-
 import os
 
 import torch
 
 
-__all__ = [
-    "get_device_type",
-    "get_local_device",
-    "device_count",
-    "set_device",
-    "get_current_device",
-    "get_backend",
-    "empty_cache",
-    "manual_seed_all",
-    "get_rng_state",
-    "set_rng_state",
-]
+def _npu_module():
+    module = getattr(torch, "npu", None)
+    if module is None:
+        return None
+    try:
+        return module if module.is_available() else None
+    except Exception:
+        return None
 
 
-def get_device_type() -> str:
-    """Auto-detect the available accelerator type.
+def is_npu_available() -> bool:
+    requested = os.environ.get("DEEPSPEC_DEVICE", "").strip().lower()
+    if requested == "cuda":
+        return False
+    if requested == "npu":
+        return _npu_module() is not None
+    return _npu_module() is not None
 
-    Priority:
-      1. ``DEEPSPEC_DEVICE`` environment variable.
-      2. NVIDIA CUDA (``torch.cuda``).
-      3. Ascend NPU (``torch.npu``).
-      4. CPU fallback.
-    """
-    dt = os.environ.get("DEEPSPEC_DEVICE", None)
-    if dt:
-        return dt
-    if torch.cuda.is_available():
-        return "cuda"
-    if hasattr(torch, "npu") and torch.npu.is_available():
+
+def device_type() -> str:
+    requested = os.environ.get("DEEPSPEC_DEVICE", "").strip().lower()
+    if requested in {"cuda", "npu"}:
+        return requested
+    if _npu_module() is not None:
         return "npu"
-    return "cpu"
+    return "cuda"
 
 
-def get_local_device() -> torch.device:
-    """Return the local torch.device for the current process rank."""
-    device_type = get_device_type()
-    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-    return torch.device(device_type, local_rank)
+def accelerator_module():
+    return getattr(torch, device_type())
+
+
+def accelerator_backend() -> str:
+    return "hccl" if device_type() == "npu" else "nccl"
 
 
 def device_count() -> int:
-    """Return the number of visible devices on this node."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        return torch.cuda.device_count()
-    if device_type == "npu":
-        return torch.npu.device_count()
-    return 1
+    return int(accelerator_module().device_count())
 
 
 def set_device(local_rank: int) -> None:
-    """Bind the current process to the given local rank's device."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        torch.cuda.set_device(local_rank)
-    elif device_type == "npu":
-        torch.npu.set_device(local_rank)
+    accelerator_module().set_device(int(local_rank))
 
 
-def get_current_device() -> int:
-    """Return the current device id for the active accelerator."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        return torch.cuda.current_device()
-    if device_type == "npu":
-        return torch.npu.current_device()
-    return 0
+def current_device_index() -> int:
+    return int(accelerator_module().current_device())
 
 
-def get_backend() -> str:
-    """Return the distributed backend appropriate for the active accelerator.
-
-    The value can be overridden via the ``DEEPSPEC_DIST_BACKEND`` environment
-    variable (useful for testing or exotic setups).
-    """
-    backend = os.environ.get("DEEPSPEC_DIST_BACKEND", None)
-    if backend:
-        return backend
-    return {
-        "cuda": "nccl",
-        "npu": "hccl",
-        "cpu": "gloo",
-    }[get_device_type()]
-
-
-def empty_cache() -> None:
-    """Clear the device memory cache when supported."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        torch.cuda.empty_cache()
-    elif device_type == "npu":
-        torch.npu.empty_cache()
+def make_device(local_rank: int | None = None) -> torch.device:
+    if local_rank is None:
+        local_rank = current_device_index()
+    return torch.device(device_type(), int(local_rank))
 
 
 def manual_seed_all(seed: int) -> None:
-    """Set the seed on all devices on this node."""
-    torch.manual_seed(seed)
-    device_type = get_device_type()
-    if device_type == "cuda":
-        torch.cuda.manual_seed_all(seed)
-    elif device_type == "npu":
-        torch.npu.manual_seed_all(seed)
+    if device_count() > 0:
+        accelerator_module().manual_seed_all(int(seed))
+
+
+def empty_cache() -> None:
+    module = accelerator_module()
+    if hasattr(module, "empty_cache"):
+        module.empty_cache()
 
 
 def get_rng_state():
-    """Return the RNG state for the active accelerator."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        return torch.cuda.get_rng_state()
-    if device_type == "npu":
-        return torch.npu.get_rng_state()
-    return torch.get_rng_state()
+    return accelerator_module().get_rng_state()
 
 
 def set_rng_state(state) -> None:
-    """Restore the RNG state for the active accelerator."""
-    device_type = get_device_type()
-    if device_type == "cuda":
-        torch.cuda.set_rng_state(state)
-    elif device_type == "npu":
-        torch.npu.set_rng_state(state)
-    else:
-        torch.set_rng_state(state)
+    accelerator_module().set_rng_state(state)

@@ -26,6 +26,8 @@ from deepspec.data.target_cache_dataset import (
 from deepspec.data.jsonl_dataset import JsonLineDataset
 from deepspec.utils import (
     CustomJSONEncoder,
+    device_count,
+    empty_cache,
     get_git_diff,
     get_git_sha,
     init_dist,

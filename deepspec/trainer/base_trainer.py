@@ -15,13 +15,14 @@ from deepspec.data.device_prefetcher import DevicePrefetcher
 from deepspec.utils import (
     BF16Optimizer,
     StatelessResumableDistributedSampler,
+    device_count,
+    device_type,
     ensure_dir,
     init_dist,
     is_global_main_process,
     print_on_global_main,
     print_on_local_main,
 )
-from deepspec.utils.device import device_count, get_device_type
 from deepspec.trainer.ckpt_manager import (
     discover_latest_checkpoint,
     load_resume_draft_model,
@@ -68,7 +69,7 @@ def _build_fsdp_kwargs(
     if sharding_strategy in _HYBRID_STRATEGIES:
         devices_per_node = device_count()
         fsdp_kwargs["device_mesh"] = init_device_mesh(
-            get_device_type(),
+            device_type(),
             (world_size // devices_per_node, devices_per_node),
             mesh_dim_names=("replicate", "shard"),
         )
@@ -144,7 +145,7 @@ def _launch_eval(
     tensorboard_dir: str,
     exp_name: str,
 ) -> None:
-    print("You can use this function to launch your auto eval script!")
+    print("You can use this function to launch to your auto eval script!")
 
 class BaseTrainer:
     data_collator_cls = None
@@ -176,7 +177,7 @@ class BaseTrainer:
                 global_rank=self.global_rank,
             )
         self.model = self.draft_model
-        if self.args.train.torch_compile and get_device_type() != "npu":
+        if self.args.train.torch_compile:
             print_on_local_main("Compiling training model with torch.compile...")
             self.model = torch.compile(self.model, dynamic=True)
         self.model = self._wrap_with_fsdp(self.model)
@@ -284,6 +285,7 @@ class BaseTrainer:
             precision_dtype=self.precision_dtype,
             world_size=self.world_size,
         )
+        fsdp_kwargs["device_id"] = self.device
         return FSDP(model, **fsdp_kwargs)
 
     def _build_train_dataloader(self, start_offset_samples=0, num_samples=None):

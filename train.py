@@ -4,13 +4,13 @@ import os
 import torch
 from deepspec.utils import (
     CustomJSONEncoder,
+    device_count,
     get_git_diff,
     load_config,
     parse_opts_to_config,
     seed_all,
     get_git_sha,
 )
-from deepspec.utils.device import device_count
 
 os.environ['USE_TORCH']='true'
 os.environ['WANDB_DISABLED']='true'

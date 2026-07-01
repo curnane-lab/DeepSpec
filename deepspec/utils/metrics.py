@@ -3,7 +3,7 @@ import re
 import torch
 import torch.distributed as dist
 
-from deepspec.utils.device import get_backend, get_current_device, get_device_type
+from .device import make_device
 
 
 _REDUCTION_PATTERN = re.compile(r"^(dp_)?(mean|sum|max|min|last)$")
@@ -21,9 +21,8 @@ def _detach_scalar(value):
 
 def _clone_to_reduce_device(value: torch.Tensor) -> torch.Tensor:
     tensor = value.detach().clone().to(torch.float32)
-    backend = get_backend()
-    if backend in ("nccl", "hccl") and not tensor.is_cuda and not tensor.is_npu:
-        tensor = tensor.to(torch.device(get_device_type(), get_current_device()))
+    if dist.get_backend() in {"nccl", "hccl"} and tensor.device.type == "cpu":
+        tensor = tensor.to(make_device())
     return tensor
 
 

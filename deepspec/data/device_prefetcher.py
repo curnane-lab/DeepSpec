@@ -9,7 +9,7 @@ from threading import Thread
 
 import torch
 
-from deepspec.utils.device import get_device_type
+from deepspec.utils import device_type
 
 
 def move_batch_to_device(batch, device):
@@ -93,7 +93,7 @@ class _CUDAPrefetcher:
 
 def DevicePrefetcher(dataloader, device):
     """Return the appropriate prefetcher for the active device type."""
-    if get_device_type() == "cuda":
+    if device_type() == "cuda":
         return _CUDAPrefetcher(dataloader, device)
     return _SyncPrefetcher(dataloader, device)
 

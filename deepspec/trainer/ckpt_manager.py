@@ -1,4 +1,3 @@
-from deepspec.utils.device import get_rng_state, set_rng_state
 import os
 import random
 import shutil
@@ -13,10 +12,12 @@ from torch.distributed.fsdp import FullStateDictConfig, StateDictType
 
 from deepspec.utils import (
     ensure_dir,
+    get_rng_state,
     is_global_main_process,
     print_on_global_main,
     print_on_local_main,
     safe_symlink,
+    set_rng_state,
 )
 
 
@@ -113,7 +114,9 @@ def load_training_state(
     assert saved_local_batch_size == int(local_batch_size)
 
     torch.set_rng_state(checkpoint["torch_rng"])
-    set_rng_state(checkpoint["torch_device_rng"])
+    rng_state = checkpoint.get("torch_accelerator_rng", checkpoint.get("torch_cuda_rng"))
+    if rng_state is not None:
+        set_rng_state(rng_state)
     np.random.set_state(checkpoint["numpy_rng"])
     random.setstate(checkpoint["python_rng"])
 
@@ -214,7 +217,7 @@ def _serialize_training_state(
         "world_size": int(world_size),
         "local_batch_size": int(local_batch_size),
         "torch_rng": torch.get_rng_state(),
-        "torch_device_rng": get_rng_state(),
+        "torch_accelerator_rng": get_rng_state(),
         "numpy_rng": np.random.get_state(),
         "python_rng": random.getstate(),
     }
