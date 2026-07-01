@@ -6,7 +6,7 @@ import os
 import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Subset
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoConfig, AutoModel, AutoTokenizer
 
 from deepspec.data import ConversationCollator
 from deepspec.data.target_cache_dataset import (
@@ -56,18 +56,18 @@ class TargetForwardResult:
 
 def _get_target_backbone(target_model):
     model_type = str(target_model.config.model_type)
-    if model_type in ("gemma4", "gemma4_unified"):
+    if model_type in ("gemma4", "gemma4_unified", "qwen3_5", "qwen3_5_mtp"):
         if hasattr(target_model, "language_model"):
             return target_model.language_model
         if hasattr(target_model, "model") and hasattr(target_model.model, "language_model"):
             return target_model.model.language_model
-        assert False, "Gemma4 target model must expose a text language_model."
+        assert False, f"{model_type} target model must expose a text language_model."
     return getattr(target_model, "model", target_model)
 
 
 def _get_target_hidden_size(target_model) -> int:
     model_type = str(target_model.config.model_type)
-    if model_type in ("gemma4", "gemma4_unified"):
+    if model_type in ("gemma4", "gemma4_unified", "qwen3_5", "qwen3_5_mtp"):
         return int(target_model.config.text_config.hidden_size)
     return int(target_model.config.hidden_size)
 
@@ -254,12 +254,31 @@ def main(local_rank: int):
         config.model.target_model_name_or_path,
         trust_remote_code=True,
     )
-    target_model = AutoModel.from_pretrained(
+
+    target_config = AutoConfig.from_pretrained(
         config.model.target_model_name_or_path,
-        dtype=torch.bfloat16,
-        attn_implementation="sdpa",
         trust_remote_code=True,
-    ).to(device=device).eval()
+    )
+    target_model_type = str(getattr(target_config, "model_type", ""))
+    if target_model_type in ("qwen3_5", "qwen3_5_mtp"):
+        # Qwen3.5 stores the language-model weights under the text_config
+        # architecture (usually model_type="qwen3"). Load that subset so the
+        # checkpoint keys match and we can extract hidden states correctly.
+        text_config = target_config.text_config
+        target_model = AutoModel.from_pretrained(
+            config.model.target_model_name_or_path,
+            config=text_config,
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+            trust_remote_code=True,
+        ).to(device=device).eval()
+    else:
+        target_model = AutoModel.from_pretrained(
+            config.model.target_model_name_or_path,
+            dtype=torch.bfloat16,
+            attn_implementation="sdpa",
+            trust_remote_code=True,
+        ).to(device=device).eval()
     target_hidden_size = _get_target_hidden_size(target_model)
     train_collator = ConversationCollator(
         tokenizer=tokenizer,
