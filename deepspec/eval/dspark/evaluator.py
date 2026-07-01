@@ -70,16 +70,21 @@ class Qwen3DSparkEvaluator(BaseEvaluator):
             self.args.target_name_or_path,
             dtype=torch.bfloat16,
             attn_implementation=self.EVAL_ATTN_IMPLEMENTATION,
+            trust_remote_code=True,
         ).to(device=self.device).eval()
 
         draft_model = self.draft_model_cls.from_pretrained(
             self.args.draft_name_or_path,
             dtype=torch.bfloat16,
             attn_implementation=self.EVAL_ATTN_IMPLEMENTATION,
+            trust_remote_code=True,
         ).to(self.device).eval()
         assert_no_final_target_layer(target_model, draft_model.target_layer_ids)
         assert 0.0 <= float(self.args.confidence_threshold) <= 1.0
-        tokenizer = AutoTokenizer.from_pretrained(self.args.target_name_or_path)
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.args.target_name_or_path,
+            trust_remote_code=True,
+        )
         return target_model, draft_model, tokenizer
 
     def _init_context(

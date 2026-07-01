@@ -39,7 +39,6 @@ from deepspec.utils import (
     print_on_local_main,
     seed_all,
 )
-from deepspec.utils.device import device_count, empty_cache
 
 os.environ["USE_TORCH"] = "true"
 os.environ["WANDB_DISABLED"] = "true"
@@ -253,11 +252,13 @@ def main(local_rank: int):
     local_subset = Subset(dataset, range(local_start, local_end))
     tokenizer = AutoTokenizer.from_pretrained(
         config.model.target_model_name_or_path,
+        trust_remote_code=True,
     )
     target_model = AutoModel.from_pretrained(
         config.model.target_model_name_or_path,
         dtype=torch.bfloat16,
         attn_implementation="sdpa",
+        trust_remote_code=True,
     ).to(device=device).eval()
     target_hidden_size = _get_target_hidden_size(target_model)
     train_collator = ConversationCollator(
@@ -399,6 +400,10 @@ def main(local_rank: int):
 
 
 if __name__ == "__main__":
+    os.environ.setdefault("RANK", "0")
+    os.environ.setdefault("WORLD_SIZE", "1")
+    os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
+    os.environ.setdefault("MASTER_PORT", "29500")
     if os.path.exists(".git"):
         print(f"git status:", "\n\n".join(get_git_sha(detail_info=True)))
         print("git diff:", get_git_diff())

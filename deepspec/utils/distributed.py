@@ -35,7 +35,7 @@ def init_dist(local_rank: int, timeout_minutes: int = 60):
         world_size=world_size,
         timeout=timedelta(minutes=timeout_minutes),
     )
-    if device.type == "cuda":
+    if device.type in ("cuda", "npu"):
         init_kwargs["device_id"] = device
     dist.init_process_group(**init_kwargs)
     return device, rank, world_size
