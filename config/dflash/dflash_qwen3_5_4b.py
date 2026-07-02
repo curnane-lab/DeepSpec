@@ -18,7 +18,7 @@ model = dict(
     num_draft_layers=5,
     target_layer_ids=[1, 8, 15, 22, 29],
     mask_token_id=248070,
-    num_anchors=512,
+    num_anchors=186,
 
     # Disable markov head.
     markov_rank=0,
@@ -39,7 +39,7 @@ train = dict(
     weight_decay=0.0,
     precision="bf16",
     local_batch_size=1,
-    global_batch_size=512,
+    global_batch_size=64,
     num_train_epochs=10,
     max_train_steps=None,
     max_grad_norm=1.0,
