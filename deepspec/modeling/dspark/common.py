@@ -174,10 +174,14 @@ def sample_anchor_positions(
     masked_indices = torch.where(
         valid,
         indices,
-        torch.full_like(indices, seq_len + 1),
+        torch.full(indices.shape, seq_len + 1, dtype=indices.dtype, device=device),
     )
     random_vals = torch.rand(bsz, num_candidates, device=device)
-    random_vals = torch.where(valid, random_vals, torch.full_like(random_vals, 2.0))
+    random_vals = torch.where(
+        valid,
+        random_vals,
+        torch.full(random_vals.shape, 2.0, dtype=random_vals.dtype, device=device),
+    )
     _, sorted_idx = random_vals.sort(dim=1)
     gathered = torch.gather(masked_indices, 1, sorted_idx)
     if num_candidates < max_n:
@@ -316,7 +320,7 @@ def create_noise_embed(
     noise_ids[flat_batch_idx, block_starts] = torch.where(
         block_keep_mask,
         anchor_tokens,
-        torch.tensor(mask_token_id, dtype=torch.long, device=device),
+        torch.full_like(anchor_tokens, mask_token_id),
     )
     return embed_tokens(noise_ids)
 
