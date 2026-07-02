@@ -196,7 +196,11 @@ def sample_anchor_positions(
     keep_mask = torch.arange(max_n, device=device).unsqueeze(0) < (
         valid_counts.unsqueeze(1).clamp(max=max_n)
     )
-    anchors = torch.where(keep_mask, anchors, torch.zeros_like(anchors))
+    anchors = torch.where(
+        keep_mask,
+        anchors,
+        torch.zeros(anchors.shape, dtype=anchors.dtype, device=anchors.device),
+    )
     return anchors, keep_mask
 
 
@@ -320,7 +324,12 @@ def create_noise_embed(
     noise_ids[flat_batch_idx, block_starts] = torch.where(
         block_keep_mask,
         anchor_tokens,
-        torch.full_like(anchor_tokens, mask_token_id),
+        torch.full(
+            anchor_tokens.shape,
+            mask_token_id,
+            dtype=anchor_tokens.dtype,
+            device=anchor_tokens.device,
+        ),
     )
     return embed_tokens(noise_ids)
 
