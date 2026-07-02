@@ -510,7 +510,11 @@ class Gemma4DSparkModel(Gemma4PreTrainedModel):
         safe_label_indices = torch.where(
             block_keep_mask.unsqueeze(-1),
             safe_label_indices,
-            torch.zeros_like(safe_label_indices),
+            torch.zeros(
+                safe_label_indices.shape,
+                dtype=safe_label_indices.dtype,
+                device=safe_label_indices.device,
+            ),
         )
         target_ids = torch.gather(
             input_ids.unsqueeze(1).expand(-1, anchor_positions.size(1), -1),

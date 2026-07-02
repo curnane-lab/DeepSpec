@@ -184,7 +184,11 @@ class RNNHead(VanillaMarkov):
         """
         assert hidden_states is not None
         prev_embeddings = self.get_prev_embeddings(token_ids)
-        state = torch.zeros_like(prev_embeddings)
+        state = torch.zeros(
+            prev_embeddings.shape,
+            dtype=prev_embeddings.dtype,
+            device=prev_embeddings.device,
+        )
         _, bias = self._rnn_step(state, prev_embeddings, hidden_states)
         return bias
 
