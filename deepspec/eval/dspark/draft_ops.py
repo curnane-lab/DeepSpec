@@ -29,13 +29,21 @@ def forward_dspark_draft_block(
     start: int,
     block_size: int,
 ) -> torch.Tensor:
-    draft_position_ids = position_ids[
-        :, past_key_values_draft.get_seq_length() : start + block_size
-    ]
+    # The draft attends to target_hidden_states (context) plus the noise block.
+    # Pass absolute positions for both, matching DSpark training which uses
+    # full_position_ids = context + draft. Without context positions the RoPE
+    # applied to target_hidden K/V is wrong.
+    ctx_len = target_hidden_states.shape[1]
+    context_positions = torch.arange(
+        start - ctx_len, start, device=draft_input_ids.device
+    ).unsqueeze(0)
+    draft_positions = position_ids[:, start : start + block_size]
+    full_position_ids = torch.cat([context_positions, draft_positions], dim=1)
+
     block_hidden = model._forward_backbone(
         target_hidden_states=target_hidden_states,
         noise_embedding=model.embed_tokens(draft_input_ids),
-        position_ids=draft_position_ids,
+        position_ids=full_position_ids,
         attention_mask=None,
         past_key_values=past_key_values_draft,
         use_cache=True,

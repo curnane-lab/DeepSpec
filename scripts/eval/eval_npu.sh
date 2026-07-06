@@ -11,8 +11,18 @@ export WORLD_SIZE=${WORLD_SIZE:-1}
 
 export DEEPSPEC_DEVICE=${DEEPSPEC_DEVICE:-npu}
 
-# Default to a local weights directory for offline/air-gapped environments.
-export TARGET_MODEL_PATH=${TARGET_MODEL_PATH:-Qwen3.5-4B}
+# Target model must be a local path in offline/air-gapped NPU environments.
+# Set it before running, e.g.:
+#   export TARGET_MODEL_PATH=/data1/f00538480/Qwen3.5-4B
+if [ -z "${TARGET_MODEL_PATH}" ]; then
+    echo "ERROR: TARGET_MODEL_PATH is not set." >&2
+    echo "Set it to the local directory containing the target model weights." >&2
+    exit 1
+fi
+if [ ! -d "${TARGET_MODEL_PATH}" ]; then
+    echo "ERROR: TARGET_MODEL_PATH=${TARGET_MODEL_PATH} does not exist." >&2
+    exit 1
+fi
 
 python eval.py \
     --target_name_or_path ${TARGET_MODEL_PATH} \

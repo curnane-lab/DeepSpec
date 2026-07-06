@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 import torch
 import torch.distributed as dist
-from transformers import AutoTokenizer, DynamicCache
+from transformers import AutoTokenizer
 
 from deepspec.data.parser import encode_chat_messages
 from deepspec.utils.sampling import (
@@ -189,7 +189,7 @@ def verify_draft_tokens(
     proposal: DraftProposal,
     position_ids: torch.Tensor,
     start: int,
-    past_key_values_target: DynamicCache,
+    past_key_values_target: Any,
     temperature: float,
     max_proposal_tokens: int,
     current_token_ids: torch.Tensor | None = None,
@@ -340,7 +340,7 @@ def generate_decoding_sample(
         device=device,
     )
     position_ids = torch.arange(output_ids.shape[1], device=device).unsqueeze(0)
-    past_key_values_target = DynamicCache()
+    past_key_values_target = None
 
     output = target_model(
         input_ids=input_ids,
@@ -350,6 +350,7 @@ def generate_decoding_sample(
         output_hidden_states=True,
         logits_to_keep=1,
     )
+    past_key_values_target = output.past_key_values
 
     output_ids[:, :num_input_tokens] = input_ids
     output_ids[:, num_input_tokens : num_input_tokens + 1] = sample_from_probs(
@@ -415,14 +416,20 @@ def generate_decoding_sample(
         if verification.terminated_by_stop_token:
             acceptance_lengths.append(accepted_draft_tokens)
             start += accepted_draft_tokens
-            past_key_values_target.crop(start)
+            if past_key_values_target is not None and hasattr(
+                past_key_values_target, "crop"
+            ):
+                past_key_values_target.crop(start)
             break
 
         output_ids[:, start + accepted_draft_tokens + 1] = verification.next_token
         new_token_ids = output_ids[:, start + 1 : start + accepted_draft_tokens + 2]
         acceptance_lengths.append(accepted_draft_tokens + 1)
         start += accepted_draft_tokens + 1
-        past_key_values_target.crop(start)
+        if past_key_values_target is not None and hasattr(
+            past_key_values_target, "crop"
+        ):
+            past_key_values_target.crop(start)
         update(context, verification)
 
         if has_stop_token(new_token_ids, stop_token_ids):
