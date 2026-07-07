@@ -4,7 +4,7 @@ from deepspec.trainer import Qwen3DSparkTrainer
 BASE_TB_DIR = os.path.expanduser("~/tensorboard")
 BASE_CKPT_DIR = os.path.expanduser("~/checkpoints")
 project_name = "deepspec"
-exp_name = "dspark_block7_qwen3_5_4b"
+exp_name = "dspark_block5_qwen3_5_4b"
 seed = 42
 
 # Default to a local weights directory so training works in offline/air-gapped
@@ -14,14 +14,20 @@ TARGET_MODEL_NAME_OR_PATH = os.environ.get("TARGET_MODEL_PATH", "Qwen3.5-4B")
 
 model = dict(
     target_model_name_or_path=TARGET_MODEL_NAME_OR_PATH,
-    block_size=7,
+    # block_size and num_anchors are reduced vs. the CUDA DSpark config to keep
+    # per-step activation memory comparable to DFlash on Ascend NPUs. DSpark
+    # adds markov/confidence heads and L1 loss, all of which allocate large
+    # vocab-sized tensors (draft_probs, target_probs, markov logits).
+    block_size=5,
     num_draft_layers=5,
     target_layer_ids=[1, 8, 15, 22, 29],
     mask_token_id=248070,
-    num_anchors=186,
+    num_anchors=96,
 
     ## markov head
-    markov_rank=256,
+    # rank is halved vs. the CUDA default to cut the [vocab, rank] embedding
+    # and [rank, vocab] projection memory in half on NPU.
+    markov_rank=128,
     markov_head_type='vanilla',
 
     ## confidence head
