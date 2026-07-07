@@ -28,6 +28,7 @@ from deepspec.modeling.dspark.common import (
     sample_anchor_positions,
 )
 from deepspec.modeling.dspark.markov_head import build_markov_head
+from deepspec.utils.device import device_type
 from deepspec.utils.sampling import sample_tokens
 
 
@@ -303,8 +304,12 @@ class Qwen3DSparkModel(Qwen3PreTrainedModel):
                 dtype=hidden_states.dtype
             )
             features = torch.cat([hidden_states, prev_embeddings], dim=-1)
-            return self.confidence_head(features).float()
-        return self.confidence_head(hidden_states).float()
+            pred = self.confidence_head(features)
+        else:
+            pred = self.confidence_head(hidden_states)
+        # CUDA keeps the scalar confidence prediction in fp32 for stability;
+        # NPU stays in the active dtype to avoid AICore record-task failures.
+        return pred if device_type() == "npu" else pred.float()
 
     def sample_draft_tokens(
         self,
@@ -516,9 +521,14 @@ class Qwen3DSparkModel(Qwen3PreTrainedModel):
                     [output_hidden_4d, prev_embeddings],
                     dim=-1,
                 )
-                confidence_pred = self.confidence_head(confidence_features).float()
+                raw_confidence_pred = self.confidence_head(confidence_features)
             else:
-                confidence_pred = self.confidence_head(output_hidden_4d).float()
+                raw_confidence_pred = self.confidence_head(output_hidden_4d)
+            confidence_pred = (
+                raw_confidence_pred
+                if device_type() == "npu"
+                else raw_confidence_pred.float()
+            )
 
         return DSparkForwardOutput(
             draft_logits=draft_logits,

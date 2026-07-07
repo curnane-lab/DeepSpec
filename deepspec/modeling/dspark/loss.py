@@ -4,8 +4,21 @@ import torch
 import torch.distributed as dist
 import torch.nn.functional as F
 
+from deepspec.utils.device import device_type
 from deepspec.utils.metrics import add_metric
 from .common import DSparkForwardOutput
+
+
+def _stable_softmax(logits: torch.Tensor, dim: int = -1) -> torch.Tensor:
+    """Numerically-stable softmax.
+
+    CUDA keeps the full-vocab softmax in fp32 for stability.  On Ascend NPUs
+    the fp32 path over a 200k+ vocab dimension can hit AICore execution
+    errors, so we stay in the model's active dtype (usually bf16) there.
+    """
+    if device_type() == "npu":
+        return torch.softmax(logits, dim=dim)
+    return torch.softmax(logits.float(), dim=dim)
 
 
 def _all_reduce_loss_denominators(
@@ -64,10 +77,12 @@ def _compute_accept_rate_3d(
 ) -> Optional[torch.Tensor]:
     if aligned_target_logits is None:
         return None
-    draft_probs = torch.softmax(outputs.draft_logits.float(), dim=-1)
-    target_probs = torch.softmax(aligned_target_logits.float(), dim=-1)
+    draft_probs = _stable_softmax(outputs.draft_logits, dim=-1)
+    target_probs = _stable_softmax(aligned_target_logits, dim=-1)
     accept_rate_3d = 1.0 - 0.5 * (draft_probs - target_probs).abs().sum(dim=-1)
-    return accept_rate_3d.clamp_(0.0, 1.0)
+    # Use out-of-place clamp; in-place ops on NPU tensors inside the autograd
+    # graph have been observed to trigger AICore record-event failures.
+    return accept_rate_3d.clamp(0.0, 1.0)
 
 
 def _compute_local_l1_term(
@@ -76,11 +91,11 @@ def _compute_local_l1_term(
     aligned_target_logits: Optional[torch.Tensor],
     loss_weight_mask: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    zero = outputs.draft_logits.new_zeros((), dtype=torch.float32)
+    zero = outputs.draft_logits.new_zeros(())
     if aligned_target_logits is None:
         return zero, zero
-    draft_probs = torch.softmax(outputs.draft_logits.float(), dim=-1)
-    target_probs = torch.softmax(aligned_target_logits.float(), dim=-1)
+    draft_probs = _stable_softmax(outputs.draft_logits, dim=-1)
+    target_probs = _stable_softmax(aligned_target_logits, dim=-1)
     l1_dist_per_token = (draft_probs - target_probs).abs().sum(dim=-1)
     l1_loss_num = (l1_dist_per_token * loss_weight_mask).sum()
     l1_loss_den = loss_weight_mask.sum()
@@ -154,21 +169,28 @@ def _collect_local_terms(
             "aligned_target_logits is required when confidence head is enabled."
         )
         confidence_targets = accept_rate_3d.detach()
+        # On NPU keep confidence tensors in the active dtype; the fp32 cast has
+        # been observed to contribute to AICore failures during backward.
+        confidence_pred = (
+            outputs.confidence_pred
+            if device_type() == "npu"
+            else outputs.confidence_pred.float()
+        )
         confidence_errors = F.binary_cross_entropy_with_logits(
-            outputs.confidence_pred.float(),
+            confidence_pred,
             confidence_targets,
             reduction="none",
         ) * loss_weight_mask
         confidence_loss_num = confidence_errors.sum()
         confidence_loss_den = loss_weight_mask.sum()
         with torch.no_grad():
-            confidence_probs = outputs.confidence_pred.float().sigmoid()
+            confidence_probs = confidence_pred.sigmoid()
             confidence_error = confidence_probs - accept_rate_3d
             confidence_abs_error_num = (
                 confidence_error.abs() * loss_weight_mask
             ).sum()
             confidence_bias_num = (confidence_error * loss_weight_mask).sum()
-            valid_mask = outputs.eval_mask.to(torch.float32)
+            valid_mask = outputs.eval_mask.to(loss_weight_mask.dtype)
             confidence_prefix_probs = (
                 confidence_probs * valid_mask
             ).cumprod(dim=-1)
