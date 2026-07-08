@@ -1,6 +1,7 @@
 from __future__ import annotations
 import argparse
 import json
+import os
 import torch
 from transformers import AutoConfig
 from deepspec.eval.dspark import Gemma4DSparkEvaluator, Qwen3DSparkEvaluator
