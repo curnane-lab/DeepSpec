@@ -20,7 +20,6 @@ def _crop_cache(cache, max_length: int):
         cache.crop(max_length)
 
 
-
 DSparkModel = Qwen3DSparkModel | Gemma4DSparkModel
 
 
