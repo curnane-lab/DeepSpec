@@ -6,9 +6,19 @@ import torch
 from transformers import DynamicCache
 
 from deepspec.eval.base_evaluator import DraftProposal
+from deepspec.utils.device import device_type
 from deepspec.utils.sampling import logits_to_probs
 from deepspec.modeling.dspark.gemma4 import Gemma4DSparkModel
 from deepspec.modeling.dspark.qwen3 import Qwen3DSparkModel
+
+
+def _crop_cache(cache, max_length: int):
+    """Crop a key-value cache, tolerating caches without a native crop()."""
+    if cache is None:
+        return
+    if hasattr(cache, "crop"):
+        cache.crop(max_length)
+
 
 
 DSparkModel = Qwen3DSparkModel | Gemma4DSparkModel
@@ -49,7 +59,9 @@ def forward_dspark_draft_block(
         use_cache=True,
         is_causal=False,
     )
-    past_key_values_draft.crop(start)
+    # Some NPU-compatible caches (e.g. Qwen3.5's hybrid cache) do not expose
+    # crop(); only crop when the method exists.
+    _crop_cache(past_key_values_draft, start)
     return block_hidden
 
 
@@ -80,7 +92,11 @@ def _predict_confidence_logits(
     )
     if confidence_pred is None:
         return None
-    return confidence_pred.float().reshape(
+    # CUDA keeps confidence logits in fp32; NPU stays in active dtype to avoid
+    # AICore record-task failures observed during eval.
+    if device_type() != "npu":
+        confidence_pred = confidence_pred.float()
+    return confidence_pred.reshape(
         confidence_pred.shape[0],
         block_size,
         -1,
