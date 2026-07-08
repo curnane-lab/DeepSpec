@@ -533,8 +533,25 @@ class BaseEvaluator:
             dataset = dataset[:max_samples]
 
         stop_token_ids = resolve_stop_token_ids(self.target_model, self.tokenizer)
+        local_indices = list(range(self.global_rank, len(dataset), self.world_size))
+        num_local_samples = len(local_indices)
+        log_interval = max(1, num_local_samples // 20)
+        if self.global_rank == 0:
+            print(
+                f"[eval/{dataset_name}] start: {len(dataset)} total samples, "
+                f"{self.world_size} rank(s), ~{num_local_samples} samples per rank",
+                flush=True,
+            )
+
         responses = []
-        for idx in range(self.global_rank, len(dataset), self.world_size):
+        for local_idx, idx in enumerate(local_indices):
+            if self.global_rank == 0 and local_idx % log_interval == 0:
+                pct = 100.0 * local_idx / max(1, num_local_samples)
+                print(
+                    f"[eval/{dataset_name}] progress: {local_idx}/{num_local_samples} "
+                    f"local samples ({pct:.1f}%)",
+                    flush=True,
+                )
             seed_all(int(self.args.seed) + idx)
             instance = dataset[idx]
             messages = [{"role": "user", "content": instance["turns"][0]}]
@@ -550,6 +567,13 @@ class BaseEvaluator:
                     input_ids=input_ids,
                     stop_token_ids=stop_token_ids,
                 )
+            )
+
+        if self.global_rank == 0:
+            print(
+                f"[eval/{dataset_name}] finished: {num_local_samples}/{num_local_samples} "
+                f"local samples (100.0%)",
+                flush=True,
             )
 
         return responses
