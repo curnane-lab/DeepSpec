@@ -18,7 +18,12 @@ from .device import (
 
 
 def init_dist(local_rank: int, timeout_minutes: int = 60):
-    local_world_size = device_count()
+    # When the caller spawns fewer processes than the physical device count
+    # (e.g. eval.py restricted via --nproc), use the requested local world size
+    # instead of device_count() so HCCL world size matches the spawned ranks.
+    local_world_size = int(
+        os.environ.get("DEEPSPEC_LOCAL_WORLD_SIZE", device_count())
+    )
     assert local_world_size > 0, "no accelerator devices are visible"
     node_rank = int(os.environ["RANK"])
     node_world_size = int(os.environ["WORLD_SIZE"])

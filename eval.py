@@ -70,6 +70,10 @@ if __name__ == "__main__":
     args = parse_args()
     nprocs = args.nproc if args.nproc is not None else device_count()
     assert nprocs > 0, f"nproc must be positive, got {nprocs}"
+    # init_dist() derives the local world size from device_count() by default.
+    # When we restrict evaluation to a subset of devices, tell init_dist the
+    # actual number of spawned processes so HCCL sees a consistent world size.
+    os.environ["DEEPSPEC_LOCAL_WORLD_SIZE"] = str(nprocs)
     torch.multiprocessing.spawn(
         main,
         args=(args,),

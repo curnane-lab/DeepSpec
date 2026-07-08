@@ -34,6 +34,21 @@ export WORLD_SIZE=${WORLD_SIZE:-1}
 
 export DEEPSPEC_DEVICE=${DEEPSPEC_DEVICE:-npu}
 
+# HCCL network setup: auto-detect the socket interface if not already set.
+# Without HCCL_SOCKET_IFNAME, multi-rank HCCL initialization can fail with
+# "rank num[X] is different with rank list size[Y]" on some Ascend nodes.
+if [ -z "${HCCL_SOCKET_IFNAME}" ]; then
+    _iface=$(ip -4 -o addr show 2>/dev/null | awk '!/^[0-9]+: lo/{gsub(/:/,"",$2); print $2; exit}')
+    if [ -n "${_iface}" ]; then
+        export HCCL_SOCKET_IFNAME="${_iface}"
+        echo "Auto-detected HCCL_SOCKET_IFNAME=${HCCL_SOCKET_IFNAME}"
+    fi
+fi
+
+# Increase HCCL connection/execution timeouts for large model eval workloads.
+export HCCL_CONNECT_TIMEOUT=${HCCL_CONNECT_TIMEOUT:-600}
+export HCCL_EXEC_TIMEOUT=${HCCL_EXEC_TIMEOUT:-600}
+
 # Infer the number of local processes from the visible NPU devices.
 # torch.npu.device_count() may report all physical devices on some Ascend
 # setups, which causes HCCL initialization errors when only a subset is
