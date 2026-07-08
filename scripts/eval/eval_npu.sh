@@ -56,6 +56,10 @@ export HCCL_EXEC_TIMEOUT=${HCCL_EXEC_TIMEOUT:-600}
 _npu_visible=${ASCEND_RT_VISIBLE_DEVICES:-0,1,2,3}
 _nproc=$(echo "${_npu_visible}" | tr ',' '\n' | wc -l)
 
+# Also export the local world size explicitly so eval.py / init_dist() agree
+# even if device_count() reports a different number of physical devices.
+export DEEPSPEC_LOCAL_WORLD_SIZE="${_nproc}"
+
 # Target model must be a local path in offline/air-gapped NPU environments.
 # Set it before running, e.g.:
 #   export TARGET_MODEL_PATH=/data1/f00538480/Qwen3.5-4B
@@ -82,7 +86,10 @@ if [ ! -d "${draft_name_or_path}" ]; then
 fi
 
 echo "Evaluating ${config_type} draft model: ${draft_name_or_path}"
-echo "Spawning ${_nproc} local NPU process(es) from ASCEND_RT_VISIBLE_DEVICES=${_npu_visible}"
+echo "ASCEND_RT_VISIBLE_DEVICES=${_npu_visible}"
+echo "DEEPSPEC_LOCAL_WORLD_SIZE=${DEEPSPEC_LOCAL_WORLD_SIZE}"
+echo "HCCL_SOCKET_IFNAME=${HCCL_SOCKET_IFNAME:-<not set>}"
+echo "Spawning ${_nproc} local NPU process(es)"
 python eval.py \
     --target_name_or_path "${TARGET_MODEL_PATH}" \
     --draft_name_or_path "${draft_name_or_path}" \
