@@ -34,6 +34,13 @@ export WORLD_SIZE=${WORLD_SIZE:-1}
 
 export DEEPSPEC_DEVICE=${DEEPSPEC_DEVICE:-npu}
 
+# Infer the number of local processes from the visible NPU devices.
+# torch.npu.device_count() may report all physical devices on some Ascend
+# setups, which causes HCCL initialization errors when only a subset is
+# allocated to the job. Count ASCEND_RT_VISIBLE_DEVICES explicitly.
+_npu_visible=${ASCEND_RT_VISIBLE_DEVICES:-0,1,2,3}
+_nproc=$(echo "${_npu_visible}" | tr ',' '\n' | wc -l)
+
 # Target model must be a local path in offline/air-gapped NPU environments.
 # Set it before running, e.g.:
 #   export TARGET_MODEL_PATH=/data1/f00538480/Qwen3.5-4B
@@ -60,6 +67,8 @@ if [ ! -d "${draft_name_or_path}" ]; then
 fi
 
 echo "Evaluating ${config_type} draft model: ${draft_name_or_path}"
+echo "Spawning ${_nproc} local NPU process(es) from ASCEND_RT_VISIBLE_DEVICES=${_npu_visible}"
 python eval.py \
     --target_name_or_path "${TARGET_MODEL_PATH}" \
-    --draft_name_or_path "${draft_name_or_path}"
+    --draft_name_or_path "${draft_name_or_path}" \
+    --nproc "${_nproc}"

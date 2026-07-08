@@ -42,6 +42,16 @@ def parse_args():
     parser.add_argument("--tensorboard-dir", type=str, default=None)
     parser.add_argument("--step", type=int, default=None,help=("step for tensorboard logging"),)
     parser.add_argument("--seed", type=int, default=980406)
+    parser.add_argument(
+        "--nproc",
+        type=int,
+        default=None,
+        help=(
+            "Number of local processes to spawn. Defaults to the number of visible "
+            "accelerator devices. Useful on Ascend NPUs when torch.npu.device_count() "
+            "reports all physical devices but only a subset is available to the job."
+        ),
+    )
     args = parser.parse_args()
     args.tasks = list(TASKS)
     return args
@@ -58,8 +68,10 @@ def main(local_rank: int, args):
 
 if __name__ == "__main__":
     args = parse_args()
+    nprocs = args.nproc if args.nproc is not None else device_count()
+    assert nprocs > 0, f"nproc must be positive, got {nprocs}"
     torch.multiprocessing.spawn(
         main,
         args=(args,),
-        nprocs=device_count(),
+        nprocs=nprocs,
     )
